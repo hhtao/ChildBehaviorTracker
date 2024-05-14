@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+
+{% block title %}首页{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row">
+        {% for student in students %}
+        <div class="col-md-6 mb-3">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h2>{{ student.name }} - Score: {{ student.score }}</h2>
+                </div>
+                <div class="card-body">
+                    <h3>已完成的指标:</h3>
+                    <ul class="list-group list-group-flush" id="completedIndicatorsList-{{ student.record_id }}">
+                        {% for indicator in student.completed_indicators %}
+                        <li class="list-group-item">
+                            {{ indicator.performance__name }} - {{ indicator.action__description }} -
+                            <span
+                                class="indicator-points {% if indicator.action__points >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                {{ indicator.action__points }} 分
+                            </span>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <h3>未完成的指标:</h3>
+                    <ul class="list-group">
+                        {% for level0_indicator in student.incomplete_indicators.values %}
+                        {% if level0_indicator.children %}
+                        <li class="list-group-item">
+                            <strong>{{ level0_indicator.indicator.name }}</strong>
+                            {% for level1_indicator in level0_indicator.children.values %}
+                            {% if level1_indicator.children %}
+                            <li class="list-group-item">
+                                &nbsp;&nbsp;&nbsp;&nbsp;<strong>{{ level1_indicator.indicator.name }}</strong>
+                                {% for level2_indicator in level1_indicator.children.values %}
+                                {% if level2_indicator.indicator.level == 2 %}
+                                <li class="list-group-item">
+                                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;{{ level2_indicator.indicator.name }}
+                                    <button class="btn btn-primary btn-sm float-right" data-toggle="modal"
+                                        data-target="#actionModal-{{ student.id }}-{{ level2_indicator.indicator.id }}"
+                                        onclick="recordAction({{ student.id }}, {{ level2_indicator.indicator.id }})">添加行为</button>
+                                </li>
+                                {% endif %}
+                                {% endfor %}
+                            </li>
+                            {% endif %}
+                            {% endfor %}
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+{% for student in students %}
+    {% for indicator_id, indicator_data in student.incomplete_indicators.items %}
+       
+        {% if indicator_data.level == 0 %}
+            <!-- 一级指标 -->
+            {% for child_id, child_data in indicator_data.children.items %}
+               
+                {% if child_data.level == 1 %}
+                    {% for grandchild_id, grandchild_data in child_data.children.items %}
+                       
+                        {% if grandchild_data.level == 2 %}
+                            <!-- 模态框的HTML代码 -->
+                            <div class="modal fade" id="actionModal-{{ student.id }}-{{ grandchild_id }}" tabindex="-1" role="dialog"
+                                aria-labelledby="actionModalLabel" aria-hidden="true">
+                                <div class="modal-dialog" role="document">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title" id="actionModalLabel">选择行为 - {{ grandchild_data.indicator.name }}</h5>
+                                            <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                                                <span aria-hidden="true">&times;</span>
+                                            </button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <form id="actionForm-{{ student.id }}-{{ grandchild_id }}" onsubmit="event.preventDefault(); submitAction({{ student.id }}, {{ grandchild_data.indicator.id }})">
+                                                {% for action in grandchild_data.indicator.actions.all %}
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="action"
+                                                        id="actionRadio-{{ student.id }}-{{ grandchild_data.indicator.id }}-{{ action.id }}"
+                                                        value="{{ action.id }}">
+                                                    <label class="form-check-label"
+                                                        for="actionRadio-{{ student.id }}-{{ grandchild_data.indicator.id }}-{{ action.id }}">
+                                                        {{ action.description }} - {{ action.points }} points
+                                                    </label>
+                                                </div>
+                                                {% endfor %}
+                                            </form>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-dismiss="modal">关闭</button>
+                                            <button type="submit" class="btn btn-primary" form="actionForm-{{ student.id }}-{{ grandchild_id }}">提交</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endfor %}
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endfor %}
+{% endfor %}
+
+<script>
+    function recordAction(studentId, indicatorId) {
+    console.log('recordAction function called with studentId:', studentId, 'and indicatorId:', indicatorId);
+    // 显示模态框
+    $('#actionModal-' + studentId + '-' + indicatorId).modal('show');
+}
+
+    function submitAction(studentId, indicatorId) {
+        // 阻止表单的默认提交行为
+        event.preventDefault();
+
+        // 获取选中的单选按钮
+        var form = document.getElementById('actionForm-' + studentId + '-' + indicatorId);
+        var checkedRadio = form.querySelector('input[name="action"]:checked');
+        if (checkedRadio) {
+            var actionId = checkedRadio.value;
+            // 发送 AJAX 请求
+            fetch('/home/record_action/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCookie('csrftoken') // 如果需要，获取 CSRF 令牌
+                },
+                body: new URLSearchParams({
+                    'student_id': studentId,
+                    'action_id': actionId
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // 处理成功
+                    console.log('Action recorded successfully');
+                    // 关闭模态框
+                    $('#actionModal-' + studentId + '-' + indicatorId).modal('hide');
+                    // 重新加载主页面数据
+                    location.reload();
+                } else {
+                    // 处理错误
+                    console.error(data.error);
+                }
+            })
+            .catch(error => {
+                // 处理网络错误
+                console.error('Error:', error);
+            });
+        } else {
+            console.error('No action selected');
+        }
+    }
+
+    // 获取 CSRF 令牌的辅助函数
+    function getCookie(name) {
+        // ... 获取 CSRF 令牌的代码 ...
+    }
+
+    // 更新指标列表的函数
+    function updateIndicatorList(indicators) {
+        const indicatorList = document.getElementById('completedIndicatorsList-' + indicators[0].student_id);
+        indicatorList.innerHTML = ''; // 清空列表
+
+        indicators.forEach(indicator => {
+            const listItem = document.createElement('li');
+            listItem.textContent = `${indicator.performance__name} - ${indicator.action__description} - ${indicator.action__points} 分`;
+            // 根据 points 值改变颜色
+            listItem.style.color = indicator.action__points >= 0 ? 'green' : 'red';
+            indicatorList.appendChild(listItem);
+        });
+    }
+
+    // 获取 CSRF 令牌的辅助函数
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                // Does this cookie string begin with the name we want?
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% for indicator in indicators %}
+<li>{{ indicator.name }}
+    {% if indicator.children.all %}
+    <ul>
+        {% include "indicators_subtree.html" with indicators=indicator.children.all %}
+    </ul>
+    {% endif %}
+</li>
+{% endfor %}

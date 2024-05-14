@@ -1,0 +1,46 @@
+<!-- templates/points/points.html -->
+{% extends 'base.html' %}
+
+{% block content %}
+<canvas id="pointsChart"></canvas>
+
+<!-- 添加一个 pre 标签来显示 JSON 数据 -->
+<pre id="chartData"></pre>
+{% load static %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var ctx = document.getElementById('pointsChart').getContext('2d');
+    var pointsChart;
+
+    // 发送 AJAX 请求获取数据
+    fetch('/points/get_points_data/')
+        .then(response => response.json())
+        .then(data => {
+            // 使用获取到的数据更新 Chart.js 实例
+            if (pointsChart) {
+                pointsChart.destroy();
+            }
+            pointsChart = new Chart(ctx, {
+                type: 'bar',
+                data: data,
+                options: {
+                    scales: {
+                        yAxes: [{
+                            ticks: {
+                                beginAtZero: true
+                            }
+                        }]
+                    }
+                }
+            });
+            // 将 JSON 数据打印到页面上
+            // document.getElementById('chartData').textContent = JSON.stringify(data, null, 2);
+        })
+        .catch(error => {
+            console.error('Error fetching chart data:', error);
+        });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,144 @@
+<!-- templates/record.html -->
+{% extends 'base.html' %}
+
+{% block title %}用户记录{% endblock %}
+
+{% block content %}
+
+<div class="container">
+    <h2>Student Behavior Recording</h2>
+    <form method="post" action="{% url 'record' %}">
+        <div class="row">
+            <div class="col-md-4">
+                <h3>Students</h3>
+                <select id="student-select" class="form-control" name="performer_id">
+                    {% for student in students %}
+                    <option value="{{ student.id }}">{{ student.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-4">
+                <h3>Indicators</h3>
+                <select id="indicator-select" class="form-control" name="indicator_id">
+                    <option value="">请选择指标</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <h3>Actions</h3>
+                <select id="action-select" class="form-control" name="action_id">
+                    <option value="">请选择行为</option>
+                </select>
+            </div>
+        </div>
+        <div class="row mt-3">
+            <div class="col-md-4">
+                <button type="button" id="recordButton" class="btn btn-primary">录入数据</button>
+            </div>
+            <div class="col-md-8">
+                <!-- 添加一个文本框来显示录入的行为 -->
+                <div id="recordFeedback"></div>
+            </div>
+        </div>
+    </form>
+</div>
+
+
+<!-- templates/record.html -->
+<!-- ... 其他代码 ... -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        var indicatorSelect = document.getElementById('indicator-select');
+        var actionSelect = document.getElementById('action-select');
+        var recordButton = document.getElementById('recordButton');
+        var recordFeedback = document.getElementById('recordFeedback');
+
+        // 加载指标数据
+        fetch('/home/get_indicators/')
+            .then(response => response.json())
+            .then(data => {
+                data.indicators.forEach(indicator => {
+                    var option = document.createElement('option');
+                    option.value = indicator.id;
+                    option.textContent = indicator.name;
+                    indicatorSelect.appendChild(option);
+                });
+            })
+            .catch(error => {
+                console.error('Error loading indicators:', error);
+            });
+
+        // 当指标选择改变时，加载相应的行为数据
+        indicatorSelect.addEventListener('change', function () {
+            var indicatorId = this.value;
+            if (indicatorId) {
+                fetch('/home/get_actions/' + indicatorId + '/')
+                    .then(response => response.json())
+                    .then(data => {
+                        actionSelect.innerHTML = '<option value="">请选择行为</option>';
+                        data.actions.forEach(action => {
+                            var option = document.createElement('option');
+                            option.value = action.id;
+                            option.textContent = `${action.description} (${action.points}分)`; // 显示行为描述和分数
+                            actionSelect.appendChild(option);
+                        });
+                        // 自动选择第一个行为
+                        actionSelect.selectedIndex = 1;
+                    })
+                    .catch(error => {
+                        console.error('Error loading actions:', error);
+                    });
+            }
+        });
+
+        // 发送行为记录
+        recordButton.addEventListener('click', function (event) {
+            event.preventDefault();
+            var performerId = document.getElementById('student-select').value;
+            var indicatorId = indicatorSelect.value;
+            var actionId = actionSelect.value;
+
+            if (!performerId || !indicatorId || !actionId) {
+                recordFeedback.textContent = '请选择学生、指标和行为。';
+                return;
+            }
+
+            // 使用FormData构建请求体
+            var formData = new FormData();
+            formData.append('performer_id', performerId);
+            formData.append('indicator_id', indicatorId);
+            formData.append('action_id', actionId);
+
+            // 发送异步请求
+            fetch('/home/record/', {
+                method: 'POST',
+                // headers: {
+                //     'X-CSRFToken': '{{ csrf_token }}', 如果需要，请取消注释并添加CSRF令牌
+                // },
+                body: formData
+            })
+                .then(response => {
+                    if (response.ok) {
+                        return response.json();
+                    } else {
+                        throw new Error('Failed to save record.');
+                    }
+                })
+                .then(data => {
+                    if (data.success) {
+                        // 更新文本框内容
+                        recordFeedback.textContent = '行为录入成功！';
+                    } else {
+                        recordFeedback.textContent = '行为录入失败。';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    recordFeedback.textContent = '发生错误，请重试。';
+                });
+        });
+    });
+</script>
+<!-- ... 其他代码 ... -->
+
+
+{% endblock %}
